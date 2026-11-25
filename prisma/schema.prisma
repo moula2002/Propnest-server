@@ -1,0 +1,366 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  AGENT
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum PropertyType {
+  APARTMENT
+  HOUSE
+  VILLA
+  PLOT
+  COMMERCIAL
+  OFFICE
+  SHOP
+  OTHER
+}
+
+enum ListingType {
+  SALE
+  RENT
+  LEASE
+}
+
+enum PropertyStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  SOLD
+  RENTED
+  ARCHIVED
+}
+
+enum FurnishingStatus {
+  UNFURNISHED
+  SEMI_FURNISHED
+  FULLY_FURNISHED
+}
+
+enum PossessionStatus {
+  READY_TO_MOVE
+  UNDER_CONSTRUCTION
+}
+
+enum InquiryStatus {
+  NEW
+  CONTACTED
+  IN_PROGRESS
+  CLOSED
+  SPAM
+}
+
+model User {
+  id            String        @id @default(uuid()) @db.Uuid
+  fullName      String        @db.VarChar(100)
+  email         String        @unique @db.VarChar(255)
+  phone         String?       @db.VarChar(20)
+  passwordHash  String        @db.VarChar(255)
+  role          Role          @default(USER)
+  accountStatus AccountStatus @default(ACTIVE)
+  emailVerified Boolean       @default(false)
+  phoneVerified Boolean       @default(false)
+  profileImage  String?       @db.Text
+  createdAt     DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime      @updatedAt @db.Timestamptz(6)
+  deletedAt     DateTime?     @db.Timestamptz(6)
+
+  // Relations
+  properties         Property[]           @relation("UserProperties")
+  refreshSessions    RefreshSession[]
+  passwordResetTokens PasswordResetToken[]
+  favorites          Favorite[]
+  buyerInquiries     Inquiry[]            @relation("BuyerInquiries")
+  receivedInquiries  Inquiry[]            @relation("OwnerInquiries")
+  moderationActions  ModerationHistory[]  @relation("AdminModerations")
+  auditLogs          AuditLog[]           @relation("UserAuditLogs")
+  notifications      Notification[]
+
+  @@index([email])
+  @@index([phone])
+  @@index([role])
+  @@index([accountStatus])
+  @@map("users")
+}
+
+model RefreshSession {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  tokenHash  String    @db.VarChar(64)
+  deviceInfo String?   @db.VarChar(255)
+  ipAddress  String?   @db.VarChar(45)
+  expiresAt  DateTime  @db.Timestamptz(6)
+  revokedAt  DateTime? @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime  @updatedAt @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_sessions")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @db.VarChar(64)
+  expiresAt DateTime  @db.Timestamptz(6)
+  usedAt    DateTime? @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("password_reset_tokens")
+}
+
+model Property {
+  id                 String           @id @default(uuid()) @db.Uuid
+  ownerId            String           @db.Uuid
+  title              String           @db.VarChar(255)
+  slug               String           @unique @db.VarChar(300)
+  description        String           @db.Text
+  propertyType       String           @db.VarChar(50)
+  listingType        ListingType
+  price              Decimal          @db.Decimal(14, 2)
+  negotiable         Boolean          @default(false)
+  bedrooms           Int              @default(0)
+  bathrooms          Int              @default(0)
+  balconies          Int              @default(0)
+  builtUpArea        Decimal?         @db.Decimal(10, 2)
+  carpetArea         Decimal          @db.Decimal(10, 2)
+  plotArea           Decimal?         @db.Decimal(10, 2)
+  areaUnit           String           @default("sqft") @db.VarChar(20)
+  floorNumber        Int?
+  totalFloors        Int?
+  furnishingStatus   FurnishingStatus @default(UNFURNISHED)
+  possessionStatus   PossessionStatus @default(READY_TO_MOVE)
+  constructionStatus String?          @db.VarChar(50)
+  propertyAge        String?          @db.VarChar(50)
+  facing             String?          @db.VarChar(50)
+  parkingSpaces      Int              @default(0)
+  city               String           @db.VarChar(100)
+  locality           String           @db.VarChar(100)
+  state              String           @db.VarChar(100)
+  country            String           @default("India") @db.VarChar(100)
+  postalCode         String           @db.VarChar(20)
+  latitude           Decimal?         @db.Decimal(10, 7)
+  longitude          Decimal?         @db.Decimal(10, 7)
+  address            String           @db.Text
+  landmark           String?          @db.VarChar(255)
+  status             PropertyStatus   @default(DRAFT)
+  isFeatured         Boolean          @default(false)
+  isLatest           Boolean          @default(false)
+  rejectionReason    String?          @db.Text
+  verifiedAt         DateTime?        @db.Timestamptz(6)
+  publishedAt        DateTime?        @db.Timestamptz(6)
+  createdAt          DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime         @updatedAt @db.Timestamptz(6)
+  deletedAt          DateTime?        @db.Timestamptz(6)
+
+  // Relations
+  owner             User                @relation("UserProperties", fields: [ownerId], references: [id], onDelete: Restrict)
+  images            PropertyImage[]
+  amenities         PropertyAmenity[]
+  favorites         Favorite[]
+  inquiries         Inquiry[]
+  moderationHistory ModerationHistory[]
+
+  // High-performance single and compound indexes for 50k+ records
+  @@index([status])
+  @@index([city])
+  @@index([locality])
+  @@index([propertyType])
+  @@index([listingType])
+  @@index([price])
+  @@index([bedrooms])
+  @@index([bathrooms])
+  @@index([ownerId])
+  @@index([createdAt])
+  @@index([publishedAt])
+  @@index([slug])
+  @@index([status, city, listingType])
+  @@index([status, city, propertyType])
+  @@index([status, listingType, price])
+  @@index([status, isFeatured])
+  @@index([status, isLatest])
+  @@index([ownerId, createdAt])
+  @@index([city, locality, status])
+  @@map("properties")
+}
+
+model PropertyImage {
+  id           String   @id @default(uuid()) @db.Uuid
+  propertyId   String   @db.Uuid
+  storageKey   String   @db.VarChar(255)
+  imageUrl     String   @db.Text
+  thumbnailUrl String?  @db.Text
+  altText      String?  @db.VarChar(255)
+  displayOrder Int      @default(0)
+  isPrimary    Boolean  @default(false)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([propertyId, isPrimary])
+  @@map("property_images")
+}
+
+model Amenity {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique @db.VarChar(100)
+  slug      String   @unique @db.VarChar(100)
+  icon      String?  @db.VarChar(50)
+  imageUrl  String?  @db.Text
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  properties PropertyAmenity[]
+
+  @@map("amenities")
+}
+
+model PropertyAmenity {
+  propertyId String @db.Uuid
+  amenityId  String @db.Uuid
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  amenity  Amenity  @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@id([propertyId, amenityId])
+  @@index([propertyId])
+  @@index([amenityId])
+  @@map("property_amenities")
+}
+
+model Favorite {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  propertyId String   @db.Uuid
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, propertyId])
+  @@index([userId])
+  @@index([propertyId])
+  @@map("favorites")
+}
+
+model Inquiry {
+  id            String        @id @default(uuid()) @db.Uuid
+  propertyId    String?       @db.Uuid
+  buyerId       String?       @db.Uuid
+  ownerId       String?       @db.Uuid
+  name          String        @db.VarChar(100)
+  email         String        @db.VarChar(255)
+  phone         String        @db.VarChar(20)
+  subject       String?       @db.VarChar(150)
+  message       String        @db.Text
+  inquiryStatus InquiryStatus @default(NEW)
+  source        String        @default("WEBSITE") @db.VarChar(50)
+  createdAt     DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime      @updatedAt @db.Timestamptz(6)
+
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  buyer    User?     @relation("BuyerInquiries", fields: [buyerId], references: [id], onDelete: SetNull)
+  owner    User?     @relation("OwnerInquiries", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([buyerId])
+  @@index([ownerId])
+  @@index([email])
+  @@index([phone])
+  @@index([inquiryStatus])
+  @@index([createdAt])
+  @@map("inquiries")
+}
+
+model ModerationHistory {
+  id             String         @id @default(uuid()) @db.Uuid
+  propertyId     String         @db.Uuid
+  adminId        String         @db.Uuid
+  action         String         @db.VarChar(50)
+  previousStatus PropertyStatus
+  newStatus      PropertyStatus
+  reason         String?        @db.Text
+  createdAt      DateTime       @default(now()) @db.Timestamptz(6)
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  admin    User     @relation("AdminModerations", fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@index([propertyId])
+  @@index([adminId])
+  @@map("moderation_history")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @db.Uuid
+  action     String   @db.VarChar(100)
+  entityType String   @db.VarChar(50)
+  entityId   String   @db.VarChar(100)
+  metadata   Json?    @db.JsonB
+  ipAddress  String?  @db.VarChar(45)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+
+  actor User? @relation("UserAuditLogs", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  type      String    @db.VarChar(50)
+  title     String    @db.VarChar(255)
+  message   String    @db.Text
+  metadata  Json?     @db.JsonB
+  readAt    DateTime? @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, readAt])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model PropertyCategory {
+  id           String   @id @default(uuid()) @db.Uuid
+  type         String   @unique @db.VarChar(50)
+  name         String   @db.VarChar(100)
+  description  String?  @db.Text
+  imageUrl     String?  @db.Text
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+
+  @@map("property_categories")
+}
+
