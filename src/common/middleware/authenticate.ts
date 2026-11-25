@@ -52,3 +52,37 @@ export const authenticate = async (req: Request, _res: Response, next: NextFunct
   }
 };
 
+export const optionalAuthenticate = async (req: Request, _res: Response, next: NextFunction) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return next();
+    }
+
+    const token = authHeader.split(' ')[1];
+    if (!token) {
+      return next();
+    }
+
+    const payload = TokenService.verifyAccessToken(token);
+    const user = await prisma.user.findUnique({
+      where: { id: payload.id },
+      select: { id: true, email: true, role: true, fullName: true, accountStatus: true, deletedAt: true },
+    });
+
+    if (user && !user.deletedAt && user.accountStatus === AccountStatus.ACTIVE) {
+      req.user = {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        fullName: user.fullName,
+        accountStatus: user.accountStatus,
+      };
+    }
+    next();
+  } catch {
+    next();
+  }
+};
+
+

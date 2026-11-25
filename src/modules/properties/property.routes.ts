@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { PropertyController } from './property.controller.js';
 import { InquiryController } from '../inquiries/inquiry.controller.js';
-import { authenticate } from '../../common/middleware/authenticate.js';
+import { authenticate, optionalAuthenticate } from '../../common/middleware/authenticate.js';
 import { requirePropertyOwnerOrAdmin } from '../../common/middleware/authorize.js';
 import { validateRequest } from '../../common/middleware/validateRequest.js';
 import { inquiryLimiter } from '../../common/middleware/rateLimiter.js';
@@ -24,8 +24,8 @@ const router = Router();
 
 // Public Property Discovery
 router.get('/', asyncHandler(PropertyController.listProperties));
-router.get('/:id', asyncHandler(PropertyController.getProperty));
-router.get('/slug/:slug', asyncHandler(PropertyController.getProperty));
+router.get('/:id', optionalAuthenticate, asyncHandler(PropertyController.getProperty));
+router.get('/slug/:slug', optionalAuthenticate, asyncHandler(PropertyController.getProperty));
 router.get('/:id/similar', asyncHandler(PropertyController.getSimilarProperties));
 
 // Submit Inquiry on Property (Guest or Authenticated)
