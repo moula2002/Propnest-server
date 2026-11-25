@@ -51,3 +51,4 @@ CREATE INDEX IF NOT EXISTS "properties_status_isFeatured_idx" ON "properties"("s
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "properties_status_isLatest_idx" ON "properties"("status", "isLatest");
+
