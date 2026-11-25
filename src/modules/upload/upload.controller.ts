@@ -13,8 +13,10 @@ export class UploadController {
     const storage = getStorageService();
     const result = await storage.uploadFile(file);
     const host = req.get('host') || 'localhost:5000';
-    const protocol = req.protocol || 'http';
-    const absoluteUrl = `${protocol}://${host}${result.imageUrl}`;
+    const forwardedProto = req.headers['x-forwarded-proto'];
+    const protocol = (typeof forwardedProto === 'string' ? forwardedProto.split(',')[0].trim() : null) || req.protocol || (host.includes('localhost') ? 'http' : 'https');
+    const safeProtocol = host.includes('localhost') ? protocol : 'https';
+    const absoluteUrl = `${safeProtocol}://${host}${result.imageUrl}`;
 
     return ApiResponse.created(
       res,
@@ -35,13 +37,15 @@ export class UploadController {
 
     const storage = getStorageService();
     const host = req.get('host') || 'localhost:5000';
-    const protocol = req.protocol || 'http';
+    const forwardedProto = req.headers['x-forwarded-proto'];
+    const protocol = (typeof forwardedProto === 'string' ? forwardedProto.split(',')[0].trim() : null) || req.protocol || (host.includes('localhost') ? 'http' : 'https');
+    const safeProtocol = host.includes('localhost') ? protocol : 'https';
 
     const uploaded = await Promise.all(
       files.map(async (file) => {
         const result = await storage.uploadFile(file);
         return {
-          url: `${protocol}://${host}${result.imageUrl}`,
+          url: `${safeProtocol}://${host}${result.imageUrl}`,
           path: result.imageUrl,
           storageKey: result.storageKey,
         };

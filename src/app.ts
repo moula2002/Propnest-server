@@ -15,6 +15,9 @@ import { ApiError } from './common/utils/ApiError.js';
 export const createApp = (): Application => {
   const app = express();
 
+  // Trust reverse proxies (Render, Vercel, Nginx, AWS ELB)
+  app.set('trust proxy', 1);
+
   // 1. Security HTTP Headers with Cross-Origin Resource Policy for uploads
   app.use(
     helmet({
