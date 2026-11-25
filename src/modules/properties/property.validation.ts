@@ -34,6 +34,16 @@ export const createPropertySchema = z.object({
     address: z.string().trim().min(5),
     landmark: z.string().trim().max(255).optional(),
     amenityIds: z.array(z.string().uuid()).optional(),
+    images: z.array(z.union([
+      z.string().trim().min(1),
+      z.object({
+        imageUrl: z.string().trim().min(1),
+        altText: z.string().trim().max(255).optional(),
+        isPrimary: z.boolean().optional(),
+        storageKey: z.string().trim().max(255).optional(),
+        displayOrder: z.number().int().min(0).optional(),
+      }),
+    ])).optional(),
     isFeatured: z.boolean().optional(),
     isLatest: z.boolean().optional(),
   }),
@@ -71,6 +81,16 @@ export const updatePropertySchema = z.object({
     address: z.string().trim().min(5).optional(),
     landmark: z.string().trim().max(255).optional(),
     amenityIds: z.array(z.string().uuid()).optional(),
+    images: z.array(z.union([
+      z.string().trim().min(1),
+      z.object({
+        imageUrl: z.string().trim().min(1),
+        altText: z.string().trim().max(255).optional(),
+        isPrimary: z.boolean().optional(),
+        storageKey: z.string().trim().max(255).optional(),
+        displayOrder: z.number().int().min(0).optional(),
+      }),
+    ])).optional(),
     isFeatured: z.boolean().optional(),
     isLatest: z.boolean().optional(),
   }),

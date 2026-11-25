@@ -781,11 +781,16 @@ export class AdminService {
     const property = await prisma.property.findUnique({ where: { id: propertyId } });
     if (!property || property.deletedAt) throw ApiError.notFound('Property not found');
 
+    const amenityIds: string[] | undefined = Array.isArray(data.amenityIds) ? data.amenityIds : undefined;
+    const images: any[] | undefined = Array.isArray(data.images) ? data.images : undefined;
+
     delete data.id;
     delete data.ownerId;
     delete data.createdAt;
     delete data.updatedAt;
     delete data.deletedAt;
+    delete data.amenityIds;
+    delete data.images;
 
     if (data.price !== undefined) data.price = Number(data.price);
     if (data.bedrooms !== undefined) data.bedrooms = Number(data.bedrooms);
@@ -795,9 +800,48 @@ export class AdminService {
     if (data.isLatest !== undefined) data.isLatest = Boolean(data.isLatest);
 
     const updated = await prisma.$transaction(async (tx) => {
+      if (amenityIds !== undefined) {
+        await tx.propertyAmenity.deleteMany({ where: { propertyId } });
+        if (amenityIds.length > 0) {
+          await tx.propertyAmenity.createMany({
+            data: amenityIds.map((id) => ({ propertyId, amenityId: id })),
+            skipDuplicates: true,
+          });
+        }
+      }
+
+      if (images !== undefined) {
+        await tx.propertyImage.deleteMany({ where: { propertyId } });
+        if (images.length > 0) {
+          const imageRecords = images.map((img: any, idx: number) => {
+            const imageUrl = typeof img === 'string' ? img : img.imageUrl;
+            const altText = typeof img === 'object' && img.altText ? img.altText : `${property.title} - Image ${idx + 1}`;
+            const isPrimary = typeof img === 'object' && img.isPrimary !== undefined ? Boolean(img.isPrimary) : idx === 0;
+            const storageKey = typeof img === 'object' && img.storageKey ? img.storageKey : `admin-uploads/${propertyId}-${idx}`;
+            return {
+              propertyId,
+              storageKey,
+              imageUrl,
+              thumbnailUrl: typeof img === 'object' && img.thumbnailUrl ? img.thumbnailUrl : null,
+              altText,
+              displayOrder: typeof img === 'object' && img.displayOrder !== undefined ? Number(img.displayOrder) : idx,
+              isPrimary,
+            };
+          });
+
+          await tx.propertyImage.createMany({
+            data: imageRecords,
+          });
+        }
+      }
+
       const p = await tx.property.update({
         where: { id: propertyId },
         data,
+        include: {
+          images: { orderBy: { displayOrder: 'asc' } },
+          amenities: { include: { amenity: true } },
+        },
       });
 
       await tx.auditLog.create({

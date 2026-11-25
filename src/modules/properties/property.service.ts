@@ -17,7 +17,9 @@ export class PropertyService {
   static async createProperty(ownerId: string, data: any) {
     const slug = this.generateSlug(data.title, data.city);
     const amenityIds: string[] = data.amenityIds || [];
+    const images: any[] = Array.isArray(data.images) ? data.images : [];
     delete data.amenityIds;
+    delete data.images;
 
     const property = await prisma.$transaction(async (tx) => {
       const created = await tx.property.create({
@@ -39,11 +41,33 @@ export class PropertyService {
         });
       }
 
+      if (images.length > 0) {
+        const imageRecords = images.map((img: any, idx: number) => {
+          const imageUrl = typeof img === 'string' ? img : img.imageUrl;
+          const altText = typeof img === 'object' && img.altText ? img.altText : `${created.title} - Image ${idx + 1}`;
+          const isPrimary = typeof img === 'object' && img.isPrimary !== undefined ? Boolean(img.isPrimary) : idx === 0;
+          const storageKey = typeof img === 'object' && img.storageKey ? img.storageKey : `uploads/${created.id}-${idx}`;
+          return {
+            propertyId: created.id,
+            storageKey,
+            imageUrl,
+            thumbnailUrl: typeof img === 'object' && img.thumbnailUrl ? img.thumbnailUrl : null,
+            altText,
+            displayOrder: typeof img === 'object' && img.displayOrder !== undefined ? Number(img.displayOrder) : idx,
+            isPrimary,
+          };
+        });
+
+        await tx.propertyImage.createMany({
+          data: imageRecords,
+        });
+      }
+
       return tx.property.findUnique({
         where: { id: created.id },
         include: {
           amenities: { include: { amenity: true } },
-          images: true,
+          images: { orderBy: { displayOrder: 'asc' } },
         },
       });
     });
@@ -108,7 +132,9 @@ export class PropertyService {
     }
 
     const amenityIds: string[] | undefined = data.amenityIds;
+    const images: any[] | undefined = Array.isArray(data.images) ? data.images : undefined;
     delete data.amenityIds;
+    delete data.images;
 
     // Disallow overriding immutable fields
     delete data.id;
@@ -124,6 +150,31 @@ export class PropertyService {
           await tx.propertyAmenity.createMany({
             data: amenityIds.map((id) => ({ propertyId, amenityId: id })),
             skipDuplicates: true,
+          });
+        }
+      }
+
+      if (images !== undefined) {
+        await tx.propertyImage.deleteMany({ where: { propertyId } });
+        if (images.length > 0) {
+          const imageRecords = images.map((img: any, idx: number) => {
+            const imageUrl = typeof img === 'string' ? img : img.imageUrl;
+            const altText = typeof img === 'object' && img.altText ? img.altText : `Property Image ${idx + 1}`;
+            const isPrimary = typeof img === 'object' && img.isPrimary !== undefined ? Boolean(img.isPrimary) : idx === 0;
+            const storageKey = typeof img === 'object' && img.storageKey ? img.storageKey : `uploads/${propertyId}-${idx}`;
+            return {
+              propertyId,
+              storageKey,
+              imageUrl,
+              thumbnailUrl: typeof img === 'object' && img.thumbnailUrl ? img.thumbnailUrl : null,
+              altText,
+              displayOrder: typeof img === 'object' && img.displayOrder !== undefined ? Number(img.displayOrder) : idx,
+              isPrimary,
+            };
+          });
+
+          await tx.propertyImage.createMany({
+            data: imageRecords,
           });
         }
       }
