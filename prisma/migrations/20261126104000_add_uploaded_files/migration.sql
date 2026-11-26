@@ -12,3 +12,4 @@ CREATE TABLE IF NOT EXISTS "uploaded_files" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "uploaded_files_filename_key" ON "uploaded_files"("filename");
+
