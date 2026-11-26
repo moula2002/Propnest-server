@@ -44,7 +44,9 @@ export const createApp = (): Application => {
   if (!fs.existsSync(uploadDir)) {
     try {
       fs.mkdirSync(uploadDir, { recursive: true });
-    } catch {}
+    } catch (dirErr) {
+      logger.warn('Could not create upload directory:', dirErr);
+    }
   }
 
   // First check local disk cache, then fallback to PostgreSQL database
@@ -66,7 +68,9 @@ export const createApp = (): Application => {
         // Cache to local disk for fast subsequent requests
         try {
           fs.writeFileSync(localFilePath, dbFile.data);
-        } catch {}
+        } catch (writeErr) {
+          logger.warn('Could not cache file to local disk:', writeErr);
+        }
 
         res.setHeader('Content-Type', dbFile.mimeType || 'image/jpeg');
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');

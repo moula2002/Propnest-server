@@ -48,18 +48,19 @@ export class LocalStorageAdapter implements IStorageAdapter {
 
     // Persist permanently into PostgreSQL database
     try {
+      const bytes = new Uint8Array(file.buffer);
       await prisma.uploadedFile.upsert({
         where: { filename: safeFilename },
         update: {
           mimeType: file.mimetype,
           size: file.size,
-          data: Buffer.from(file.buffer) as any,
+          data: bytes,
         },
         create: {
           filename: safeFilename,
           mimeType: file.mimetype,
           size: file.size,
-          data: Buffer.from(file.buffer) as any,
+          data: bytes,
         },
       });
     } catch (dbErr) {
@@ -85,7 +86,9 @@ export class LocalStorageAdapter implements IStorageAdapter {
         await prisma.uploadedFile.deleteMany({
           where: { filename: sanitized },
         });
-      } catch {}
+      } catch (delErr) {
+        logger.warn('Could not delete file record from database:', delErr);
+      }
       return true;
     } catch (error) {
       logger.error(`Failed to delete local file ${storageKey}:`, error);
