@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { v2 as cloudinary } from 'cloudinary';
 import { env } from '../../config/env.js';
 import { prisma } from '../../config/database.js';
 import { ApiError } from '../../common/utils/ApiError.js';
@@ -98,17 +99,53 @@ export class LocalStorageAdapter implements IStorageAdapter {
 }
 
 export class CloudinaryStorageAdapter implements IStorageAdapter {
-  async uploadFile(_file: Express.Multer.File): Promise<UploadResult> {
+  constructor() {
+    cloudinary.config({
+      cloud_name: env.CLOUDINARY_CLOUD_NAME,
+      api_key: env.CLOUDINARY_API_KEY,
+      api_secret: env.CLOUDINARY_API_SECRET,
+      secure: true,
+    });
+  }
+
+  async uploadFile(file: Express.Multer.File): Promise<UploadResult> {
     if (!env.CLOUDINARY_API_KEY || !env.CLOUDINARY_CLOUD_NAME || !env.CLOUDINARY_API_SECRET) {
       throw ApiError.internal('Cloudinary storage is enabled but credentials are not configured.');
     }
-    // If real credentials are provided, cloud upload is executed.
-    // In local dev without credentials, LocalStorageAdapter is used.
-    throw ApiError.internal('Cloudinary provider integration requires production credentials.');
+
+    return new Promise<UploadResult>((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'propnest/properties',
+          resource_type: 'image',
+          transformation: [{ quality: 'auto', fetch_format: 'auto' }],
+        },
+        (error, result) => {
+          if (error || !result) {
+            logger.error('Cloudinary upload error:', error);
+            return reject(ApiError.internal('Failed to upload image to Cloudinary'));
+          }
+
+          resolve({
+            storageKey: result.public_id,
+            imageUrl: result.secure_url,
+            thumbnailUrl: result.secure_url.replace('/upload/', '/upload/c_thumb,w_300,h_200/'),
+          });
+        }
+      );
+
+      uploadStream.end(file.buffer);
+    });
   }
 
-  async deleteFile(_storageKey: string): Promise<boolean> {
-    return true;
+  async deleteFile(storageKey: string): Promise<boolean> {
+    try {
+      const res = await cloudinary.uploader.destroy(storageKey);
+      return res.result === 'ok';
+    } catch (error) {
+      logger.error(`Failed to delete Cloudinary file ${storageKey}:`, error);
+      return false;
+    }
   }
 }
 

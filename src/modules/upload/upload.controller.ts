@@ -16,7 +16,9 @@ export class UploadController {
     const forwardedProto = req.headers['x-forwarded-proto'];
     const protocol = (typeof forwardedProto === 'string' ? forwardedProto.split(',')[0].trim() : null) || req.protocol || (host.includes('localhost') ? 'http' : 'https');
     const safeProtocol = host.includes('localhost') ? protocol : 'https';
-    const absoluteUrl = `${safeProtocol}://${host}${result.imageUrl}`;
+    const absoluteUrl = result.imageUrl.startsWith('http')
+      ? result.imageUrl
+      : `${safeProtocol}://${host}${result.imageUrl}`;
 
     return ApiResponse.created(
       res,
@@ -45,7 +47,9 @@ export class UploadController {
       files.map(async (file) => {
         const result = await storage.uploadFile(file);
         return {
-          url: `${safeProtocol}://${host}${result.imageUrl}`,
+          url: result.imageUrl.startsWith('http')
+            ? result.imageUrl
+            : `${safeProtocol}://${host}${result.imageUrl}`,
           path: result.imageUrl,
           storageKey: result.storageKey,
         };
