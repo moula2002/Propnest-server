@@ -74,7 +74,7 @@ export const createApp = (): Application => {
 
         res.setHeader('Content-Type', dbFile.mimeType || 'image/jpeg');
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-        return res.send(dbFile.data);
+        return res.send(Buffer.from(dbFile.data));
       }
 
       return res.status(404).json({ success: false, message: 'Image not found' });

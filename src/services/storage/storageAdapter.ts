@@ -49,19 +49,19 @@ export class LocalStorageAdapter implements IStorageAdapter {
 
     // Persist permanently into PostgreSQL database
     try {
-      const bytes = new Uint8Array(file.buffer);
+      const bufferData = Buffer.from(file.buffer);
       await prisma.uploadedFile.upsert({
         where: { filename: safeFilename },
         update: {
           mimeType: file.mimetype,
           size: file.size,
-          data: bytes,
+          data: bufferData,
         },
         create: {
           filename: safeFilename,
           mimeType: file.mimetype,
           size: file.size,
-          data: bytes,
+          data: bufferData,
         },
       });
     } catch (dbErr) {
