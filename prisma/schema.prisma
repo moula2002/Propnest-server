@@ -364,3 +364,14 @@ model PropertyCategory {
   @@map("property_categories")
 }
 
+model UploadedFile {
+  id        String   @id @default(uuid()) @db.Uuid
+  filename  String   @unique @db.VarChar(255)
+  mimeType  String   @db.VarChar(100)
+  size      Int
+  data      Bytes
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("uploaded_files")
+}
+

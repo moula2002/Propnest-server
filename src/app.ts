@@ -1,6 +1,7 @@
 import express, { Application } from 'express';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import fs from 'fs';
 import path from 'path';
 import swaggerUi from 'swagger-ui-express';
 import { corsMiddleware } from './config/cors.js';
@@ -10,6 +11,8 @@ import { errorHandler } from './common/middleware/errorHandler.js';
 import { apiV1Routes } from './routes/index.js';
 import { swaggerDocument } from './docs/swagger.js';
 import { env } from './config/env.js';
+import { prisma } from './config/database.js';
+import { logger } from './config/logger.js';
 import { ApiError } from './common/utils/ApiError.js';
 
 export const createApp = (): Application => {
@@ -36,8 +39,47 @@ export const createApp = (): Application => {
   // 4. Request Logging & Correlation ID
   app.use(requestLogger);
 
-  // 5. Static uploads directory for development
+  // 5. Database-backed & Cached Uploads Serving
   const uploadDir = path.resolve(process.cwd(), env.LOCAL_UPLOAD_DIRECTORY);
+  if (!fs.existsSync(uploadDir)) {
+    try {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    } catch {}
+  }
+
+  // First check local disk cache, then fallback to PostgreSQL database
+  app.get('/uploads/:filename', async (req, res, next) => {
+    try {
+      const filename = path.basename(req.params.filename);
+      const localFilePath = path.join(uploadDir, filename);
+
+      if (fs.existsSync(localFilePath)) {
+        return res.sendFile(localFilePath);
+      }
+
+      // Query persistent PostgreSQL database storage
+      const dbFile = await prisma.uploadedFile.findUnique({
+        where: { filename },
+      });
+
+      if (dbFile) {
+        // Cache to local disk for fast subsequent requests
+        try {
+          fs.writeFileSync(localFilePath, dbFile.data);
+        } catch {}
+
+        res.setHeader('Content-Type', dbFile.mimeType || 'image/jpeg');
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        return res.send(dbFile.data);
+      }
+
+      return res.status(404).json({ success: false, message: 'Image not found' });
+    } catch (err) {
+      logger.error(`Error serving file ${req.params.filename} from DB:`, err);
+      next(err);
+    }
+  });
+
   app.use('/uploads', express.static(uploadDir));
 
   // 6. Swagger API Documentation UI

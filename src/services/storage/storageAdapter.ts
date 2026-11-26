@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { env } from '../../config/env.js';
+import { prisma } from '../../config/database.js';
 import { ApiError } from '../../common/utils/ApiError.js';
 import { logger } from '../../config/logger.js';
 
@@ -45,6 +46,26 @@ export class LocalStorageAdapter implements IStorageAdapter {
 
     await fs.promises.writeFile(destinationPath, file.buffer);
 
+    // Persist permanently into PostgreSQL database
+    try {
+      await prisma.uploadedFile.upsert({
+        where: { filename: safeFilename },
+        update: {
+          mimeType: file.mimetype,
+          size: file.size,
+          data: Buffer.from(file.buffer) as any,
+        },
+        create: {
+          filename: safeFilename,
+          mimeType: file.mimetype,
+          size: file.size,
+          data: Buffer.from(file.buffer) as any,
+        },
+      });
+    } catch (dbErr) {
+      logger.error('Failed to persist uploaded file to PostgreSQL:', dbErr);
+    }
+
     const relativePath = `/uploads/${safeFilename}`;
     return {
       storageKey: safeFilename,
@@ -59,9 +80,13 @@ export class LocalStorageAdapter implements IStorageAdapter {
       const filePath = path.join(this.uploadDir, sanitized);
       if (fs.existsSync(filePath)) {
         await fs.promises.unlink(filePath);
-        return true;
       }
-      return false;
+      try {
+        await prisma.uploadedFile.deleteMany({
+          where: { filename: sanitized },
+        });
+      } catch {}
+      return true;
     } catch (error) {
       logger.error(`Failed to delete local file ${storageKey}:`, error);
       return false;
